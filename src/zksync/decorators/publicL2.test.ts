@@ -2,6 +2,8 @@ import { expect, test } from 'vitest'
 
 import type { Address } from 'abitype'
 import {
+  accounts,
+  approvalToken,
   daiL1,
   getZksyncMockProvider,
   mockAccountBalances,
@@ -15,9 +17,13 @@ import {
   mockTransactionDetails,
   mockedGasEstimation,
   mockedL1BatchNumber,
+  paymaster,
 } from '~test/src/zksync.js'
+import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
+import { createWalletClient } from '~viem/clients/createWalletClient.js'
 import { http } from '~viem/clients/transports/http.js'
 import { legacyEthAddress } from '~viem/zksync/constants/address.js'
+import { getApprovalBasedPaymasterInput } from '~viem/zksync/utils/paymaster/getApprovalBasedPaymasterInput.js'
 import { createPublicClient } from '../../clients/createPublicClient.js'
 import { custom } from '../../clients/transports/custom.js'
 import { estimateFee } from '../actions/estimateFee.js'
@@ -39,6 +45,14 @@ const zksyncClient = createPublicClient({
   chain: zksyncLocalHyperchain,
   transport: http(),
 }).extend(publicActionsL2())
+
+const zksyncWallet = createWalletClient({
+  account: privateKeyToAccount(accounts[0].privateKey),
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+const account = privateKeyToAccount(accounts[0].privateKey)
 
 test('getL1ChainId', async () => {
   const chainId = await mockedZksyncClient.getL1ChainId()
@@ -229,6 +243,37 @@ test('getL1TokenAddress', async () => {
   expect(
     await zksyncClient.getL1TokenAddress({
       token: legacyEthAddress,
+    }),
+  ).toBeDefined()
+})
+
+test('withdraw', async () => {
+  expect(
+    await zksyncClient.withdraw({
+      account,
+      amount: 7_000_000_000n,
+      token: legacyEthAddress,
+      paymaster: paymaster,
+      paymasterInput: getApprovalBasedPaymasterInput({
+        minAllowance: 1n,
+        token: approvalToken,
+        innerInput: new Uint8Array(),
+      }),
+    }),
+  ).toBeDefined()
+})
+
+test('withdraw hoisting', async () => {
+  expect(
+    await zksyncWallet.withdraw({
+      amount: 7_000_000_000n,
+      token: legacyEthAddress,
+      paymaster: paymaster,
+      paymasterInput: getApprovalBasedPaymasterInput({
+        minAllowance: 1n,
+        token: approvalToken,
+        innerInput: new Uint8Array(),
+      }),
     }),
   ).toBeDefined()
 })

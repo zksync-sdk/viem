@@ -1,4 +1,9 @@
 import type { Address } from 'abitype'
+import {
+  type WithdrawParameters,
+  type WithdrawReturnType,
+  withdraw,
+} from '~viem/zksync/actions/withdraw.js'
 import type { Client } from '../../clients/createClient.js'
 import type { Transport } from '../../clients/transports/createTransport.js'
 import type { Account } from '../../types/account.js'
@@ -473,6 +478,73 @@ export type PublicActionsL2<
   getL1TokenAddress: (
     args: GetL1TokenAddressParameters,
   ) => Promise<GetL1TokenAddressReturnType>
+
+  /**
+   * Initiates the withdrawal process which withdraws ETH or any ERC20 token
+   * from the associated account on L2 network to the target account on L1 network.
+   *
+   * @param args - {@link WithdrawParameters}
+   * @returns hash - The [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash. {@link SendTransactionReturnType}
+   *
+   *
+   * @example
+   * import { createPublicClient, http } from 'viem'
+   * import { privateKeyToAccount } from 'viem/accounts'
+   * import { zksync } from 'viem/chains'
+   * import { publicActionsL2, legacyEthAddress } from 'viem/zksync'
+   *
+   * const client = createPublicClient({
+   *   chain: zksync,
+   *   transport: http(),
+   * }).extend(publicActionsL2())
+   *
+   * const hash = await client.withdraw({
+   *     account: privateKeyToAccount('0x…'),
+   *     amount: 1_000_000_000_000_000_000n,
+   *     token: legacyEthAddress,
+   * })
+   *
+   * @example Account Hoisting
+   * import { createWalletClient, http } from 'viem'
+   * import { privateKeyToAccount } from 'viem/accounts'
+   * import { zksync } from 'viem/chains'
+   * import { publicActionsL2, legacyEthAddress } from 'viem/zksync'
+   *
+   * const client = createWalletClient({
+   *   account: privateKeyToAccount('0x…'),
+   *   chain: zksync,
+   *   transport: http(),
+   * }).extend(publicActionsL2())
+   *
+   * const hash = await client.withdraw({
+   *     amount: 1_000_000_000_000_000_000n,
+   *     token: legacyEthAddress,
+   * })
+   *
+   * @example Paymaster
+   * import { createPublicClient, http } from 'viem'
+   * import { privateKeyToAccount } from 'viem/accounts'
+   * import { zksync } from 'viem/chains'
+   * import { publicActionsL2, legacyEthAddress } from 'viem/zksync'
+   *
+   * const client = createPublicClient({
+   *   chain: zksync,
+   *   transport: http(),
+   * }).extend(publicActionsL2())
+   *
+   * const hash = await client.withdraw({
+   *     account: privateKeyToAccount('0x…'),
+   *     amount: 1_000_000_000_000_000_000n,
+   *     token: legacyEthAddress,
+   *     paymaster: '0x0EEc6f45108B4b806e27B81d9002e162BD910670',
+   *     paymasterInput: getApprovalBasedPaymasterInput({
+   *       minAllowance: 1n,
+   *       token: '0x2dc3685cA34163952CF4A5395b0039c00DFa851D',
+   *       innerInput: new Uint8Array(),
+   *     }),
+   * })
+   */
+  withdraw: (args: WithdrawParameters) => Promise<WithdrawReturnType>
 }
 
 export function publicActionsL2() {
@@ -502,6 +574,7 @@ export function publicActionsL2() {
       getBaseTokenL1Address: () => getBaseTokenL1Address(client),
       getL2TokenAddress: (args) => getL2TokenAddress(client, args),
       getL1TokenAddress: (args) => getL1TokenAddress(client, args),
+      withdraw: (args) => withdraw(client, args),
     }
   }
 }

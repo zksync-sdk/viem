@@ -129,6 +129,12 @@ export {
   type GetL1TokenAddressParameters,
   getL1TokenAddress,
 } from './actions/getL1TokenAddress.js'
+export {
+  type WithdrawErrorType,
+  type WithdrawParameters,
+  type WithdrawReturnType,
+  withdraw,
+} from './actions/withdraw.js'
 
 export {
   /** @deprecated Use `zksync` instead */
@@ -283,6 +289,11 @@ export type {
   ZksyncTransactionDetails as ZkSyncTransactionDetails,
   ZksyncTransactionDetails,
 } from './types/transaction.js'
+
+export {
+  legacyEthAddress,
+  l2BaseTokenAddress,
+} from './constants/address.js'
 
 export {
   type GetApprovalBasedPaymasterInputParameters,

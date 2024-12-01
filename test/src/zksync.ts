@@ -1,6 +1,17 @@
-import { zksyncLocalNode } from '~viem/chains/index.js'
+import { type Address, parseAbi } from 'abitype'
+import { type Chain, zksyncLocalNode } from '~viem/chains/index.js'
 import { createClient } from '~viem/clients/createClient.js'
-import { http } from '~viem/index.js'
+import {
+  http,
+  type Account,
+  ContractFunctionZeroDataError,
+  type ParseAccount,
+  type PublicClient,
+  type RpcSchema,
+  type Transport,
+  decodeFunctionResult,
+  encodeFunctionData,
+} from '~viem/index.js'
 import { accounts as acc } from './constants.js'
 
 export const zksyncClientLocalNode = createClient({
@@ -210,6 +221,10 @@ export function mockClientPublicActionsL2(client: any) {
   }
 }
 
+export const daiL1 = '0x70a0F165d6f8054d0d0CF8dFd4DD2005f0AF6B55'
+export const approvalToken = '0x2dc3685cA34163952CF4A5395b0039c00DFa851D'
+export const paymaster = '0x0EEc6f45108B4b806e27B81d9002e162BD910670'
+
 export const accounts = [
   {
     address: '0x36615Cf349d7F6344891B1e7CA7C72883F5dc049',
@@ -223,4 +238,45 @@ export const accounts = [
   },
 ] as const
 
-export const daiL1 = '0x70a0F165d6f8054d0d0CF8dFd4DD2005f0AF6B55'
+const tokenAbi = parseAbi([
+  'function balanceOf(address) view returns (uint256)',
+])
+
+export async function getTokenBalance<
+  transport extends Transport,
+  chain extends Chain | undefined = undefined,
+  accountOrAddress extends Account | Address | undefined = undefined,
+  rpcSchema extends RpcSchema | undefined = undefined,
+>(
+  client: PublicClient<
+    transport,
+    chain,
+    ParseAccount<accountOrAddress>,
+    rpcSchema
+  >,
+  token: Address,
+  address: Address,
+): Promise<bigint> {
+  const data = encodeFunctionData({
+    abi: tokenAbi,
+    functionName: 'balanceOf',
+    args: [address],
+  })
+
+  // @ts-ignore
+  const result = await client.call({
+    account: client.account,
+    to: token,
+    data,
+  })
+
+  if (!result.data) {
+    throw new ContractFunctionZeroDataError({ functionName: 'balanceOf' })
+  }
+
+  return decodeFunctionResult({
+    abi: tokenAbi,
+    functionName: 'balanceOf',
+    data: result.data,
+  })
+}
