@@ -1734,6 +1734,10 @@ export const sidebar = {
             text: 'getTransactionDetails',
             link: '/zksync/actions/getTransactionDetails',
           },
+          {
+            text: 'withdraw',
+            link: '/zksync/actions/withdraw',
+          },
         ],
       },
       {
