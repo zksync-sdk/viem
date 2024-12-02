@@ -1768,6 +1768,10 @@ export const sidebar = {
             text: 'deposit',
             link: '/zksync/actions/deposit',
           },
+          {
+            text: 'finalizeWithdrawal',
+            link: '/zksync/actions/finalizeWithdrawal',
+          },
         ],
       },
       {

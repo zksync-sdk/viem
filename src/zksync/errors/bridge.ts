@@ -1,3 +1,4 @@
+import type { Hash } from '~viem/types/misc.js'
 import { BaseError } from '../../errors/base.js'
 
 export type BaseFeeHigherThanValueErrorType = BaseFeeHigherThanValueError & {
@@ -25,5 +26,21 @@ export class TxHashNotFoundInLogsError extends BaseError {
     super('The transaction hash not found in event logs.', {
       name: 'TxHashNotFoundInLogsError',
     })
+  }
+}
+
+export type WithdrawalLogNotFoundErrorType = WithdrawalLogNotFoundError & {
+  name: 'WithdrawalLogNotFoundError'
+}
+export class WithdrawalLogNotFoundError extends BaseError {
+  constructor({ hash }: { hash: Hash }) {
+    super(
+      [
+        `Withdrawal log with hash ${hash} not found.`,
+        '',
+        'Either the withdrawal transaction is still processing or it did not finish successfully.',
+      ].join('\n'),
+      { name: 'WithdrawalLogNotFoundError' },
+    )
   }
 }

@@ -1,3 +1,8 @@
+import {
+  type FinalizeWithdrawalParameters,
+  type FinalizeWithdrawalReturnType,
+  finalizeWithdrawal,
+} from '~viem/zksync/actions/finalizeWithdrawal.js'
 import type { Client } from '../../clients/createClient.js'
 import type { Transport } from '../../clients/transports/createTransport.js'
 import type { Account } from '../../types/account.js'
@@ -112,6 +117,48 @@ export type WalletActionsL1<
       accountL2
     >,
   ) => Promise<DepositReturnType>
+  /**
+   * Initiates the withdrawal process which withdraws ETH or any ERC20 token
+   * from the associated account on L2 network to the target account on L1 network.
+   *
+   * @param parameters - {@link FinalizeWithdrawalParameters}
+   * @returns hash - The [Transaction](https://viem.sh/docs/glossary/terms#transaction) hash. {@link FinalizeWithdrawalReturnType}
+   *
+   * @example
+   * import { createPublicClient, createWalletClient, http } from 'viem'
+   * import { privateKeyToAccount } from 'viem/accounts'
+   * import { mainnet, zksync } from 'viem/chains'
+   * import { walletActionsL1 } from 'viem/zksync'
+   *
+   * const walletClient = createWalletClient({
+   *   account: privateKeyToAccount('0x…'),
+   *   chain: mainnet,
+   *   transport: http(),
+   * }).extend(walletActionsL1())
+   *
+   * const clientL2 = createPublicClient({
+   *   chain: zksync,
+   *   transport: http(),
+   * })
+   *
+   * const hash = await walletClient.finalizeWithdrawal({
+   *     client: clientL2,
+   *     hash: '0x…',
+   * })
+   */
+  finalizeWithdrawal: <
+    chainOverride extends Chain | undefined = undefined,
+    chainL2 extends ChainEIP712 | undefined = ChainEIP712 | undefined,
+    accountL2 extends Account | undefined = Account | undefined,
+  >(
+    parameters: FinalizeWithdrawalParameters<
+      chain,
+      account,
+      chainOverride,
+      chainL2,
+      accountL2
+    >,
+  ) => Promise<FinalizeWithdrawalReturnType>
 }
 
 export function walletActionsL1() {
@@ -124,5 +171,6 @@ export function walletActionsL1() {
   ): WalletActionsL1<chain, account> => ({
     requestExecute: (args) => requestExecute(client, args),
     deposit: (args) => deposit(client, args),
+    finalizeWithdrawal: (args) => finalizeWithdrawal(client, args),
   })
 }

@@ -11,7 +11,11 @@ import {
   zksyncLocalHyperchainL1,
 } from '~viem/zksync/chains.js'
 import { legacyEthAddress } from '~viem/zksync/constants/address.js'
-import { publicActionsL2, walletActionsL1 } from '~viem/zksync/index.js'
+import {
+  publicActionsL2,
+  walletActionsL1,
+  withdraw,
+} from '~viem/zksync/index.js'
 import { privateKeyToAccount } from '../../accounts/privateKeyToAccount.js'
 
 const baseClient = anvilMainnet.getClient({
@@ -88,6 +92,33 @@ test('deposit', async () => {
       to: walletClient.account.address,
       refundRecipient: walletClient.account.address,
       amount: 7_000_000_000n,
+    }),
+  ).toBeDefined()
+})
+
+test('finalizeWithdrawal', async () => {
+  const hash = await withdraw(clientL2, {
+    account: privateKeyToAccount(accounts[0].privateKey),
+    amount: 7_000_000_000n,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await clientL2.waitForTransactionReceipt({ hash: hash })
+  expect(receipt.status).equals('success')
+
+  try {
+    // wait for 20 seconds for tx to be in finalized state
+    await clientL2.waitForTransactionReceipt({
+      hash,
+      confirmations: 5,
+      timeout: 20_000,
+    })
+  } catch (_error) {}
+
+  expect(
+    await walletClient.finalizeWithdrawal({
+      client: clientL2,
+      hash,
     }),
   ).toBeDefined()
 })
