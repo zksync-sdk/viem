@@ -43,7 +43,8 @@
     "test:ui": "vitest dev -c ./test/vitest.config.ts --ui",
     "vectors": "bun test vectors/**/*.test.ts",
     "vectors:generate": "bun vectors/generate.ts",
-    "version:update": "bun scripts/updateVersion.ts"
+    "version:update": "bun scripts/updateVersion.ts",
+    "zksync:test:prepare": "vitest --run -c test/zksync.config.ts test/scripts/zksync.test.ts"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.15.4",
