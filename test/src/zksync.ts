@@ -413,7 +413,7 @@ export async function setupCustomHyperchain() {
   }
 }
 
-async function approveToken(
+export async function approveToken(
   chain: Chain,
   token: Address,
   spender: Address,

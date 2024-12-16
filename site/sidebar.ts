@@ -1754,6 +1754,15 @@ export const sidebar = {
         ],
       },
       {
+        text: 'L1 Wallet Actions',
+        items: [
+          {
+            text: 'requestExecute',
+            link: '/zksync/actions/requestExecute',
+          },
+        ],
+      },
+      {
         text: 'Utilities',
         items: [
           {
@@ -1766,6 +1775,15 @@ export const sidebar = {
               {
                 text: 'getGeneralPaymasterInput',
                 link: '/zksync/utilities/paymaster/getGeneralPaymasterInput',
+              },
+            ],
+          },
+          {
+            text: 'Bridge',
+            items: [
+              {
+                text: 'getL2HashFromPriorityOp',
+                link: '/zksync/utilities/bridge/getL2HashFromPriorityOp',
               },
             ],
           },
