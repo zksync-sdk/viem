@@ -1,12 +1,19 @@
 import { expect, test } from 'vitest'
 import { anvilMainnet, anvilZksync } from '~test/src/anvil.js'
-import { accounts, mockRequestReturnData } from '~test/src/zksync.js'
+import { accounts, mockRequestReturnData, zksyncAccounts } from '~test/src/zksync.js'
 import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
-import type { EIP1193RequestFn } from '~viem/index.js'
+import {
+  http,
+  type EIP1193RequestFn,
+  createPublicClient,
+  createWalletClient,
+} from '~viem/index.js'
 import {
   legacyEthAddress,
   publicActionsL2,
   walletActionsL1,
+  zksyncLocalHyperchain,
+  zksyncLocalHyperchainL1,
 } from '~viem/zksync/index.js'
 
 const baseClient = anvilMainnet.getClient({
@@ -72,6 +79,29 @@ test('deposit', async () => {
       to: account.address,
       refundRecipient: account.address,
       amount: 7_000_000_000n,
+    }),
+  ).toBeDefined()
+})
+
+const hyperchainL1WalletClient = createWalletClient({
+  chain: zksyncLocalHyperchainL1,
+  transport: http(),
+  account: privateKeyToAccount(zksyncAccounts[0].privateKey),
+}).extend(walletActionsL1())
+
+const hyperchainClient = createPublicClient({
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+test('hyperchain: requestExecute', async () => {
+  expect(
+    await hyperchainL1WalletClient.requestExecute({
+      client: hyperchainClient,
+      contractAddress: await hyperchainClient.getBridgehubContractAddress(),
+      calldata: '0x',
+      l2Value: 7_000_000_000n,
+      l2GasLimit: 900_000n,
     }),
   ).toBeDefined()
 })
