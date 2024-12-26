@@ -1760,6 +1760,10 @@ export const sidebar = {
             text: 'requestExecute',
             link: '/zksync/actions/requestExecute',
           },
+          {
+            text: 'deposit',
+            link: '/zksync/actions/deposit',
+          },
         ],
       },
       {

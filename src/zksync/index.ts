@@ -139,6 +139,17 @@ export {
   type RequestExecuteParameters,
   requestExecute,
 } from './actions/requestExecute.js'
+export {
+  type DepositErrorType,
+  type DepositReturnType,
+  type DepositParameters,
+  deposit,
+} from './actions/deposit.js'
+
+export {
+  legacyEthAddress,
+  l2BaseTokenAddress,
+} from './constants/address.js'
 
 export {
   /** @deprecated Use `zksync` instead */
