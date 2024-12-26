@@ -1,10 +1,12 @@
 import { type Address, parseAbi, parseAbiParameters } from 'abitype'
 import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
-import { createClient } from '~viem/clients/createClient.js'
+import { readContract } from '~viem/actions/public/readContract.js'
+import { type Client, createClient } from '~viem/clients/createClient.js'
 import {
   http,
   type Chain,
   type ContractFunctionExecutionError,
+  type Transport,
   createWalletClient,
   encodeAbiParameters,
   isAddressEqual,
@@ -232,6 +234,19 @@ export function mockClientPublicActionsL2(client: any) {
   client.request = async ({ method }: any) => {
     return mockRequestReturnData(method)
   }
+}
+
+export async function getTokenBalance<chain extends Chain | undefined>(
+  client: Client<Transport, chain>,
+  token: Address,
+  address: Address,
+) {
+  return await readContract(client, {
+    address: token,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [address],
+  })
 }
 
 export const accounts = [

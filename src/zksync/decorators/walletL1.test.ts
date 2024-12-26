@@ -7,6 +7,7 @@ import {
   zksyncLocalHyperchain,
   zksyncLocalHyperchainL1,
 } from '~viem/zksync/chains.js'
+import { legacyEthAddress } from '~viem/zksync/constants/address.js'
 import { publicActionsL2, walletActionsL1 } from '~viem/zksync/index.js'
 import { privateKeyToAccount } from '../../accounts/privateKeyToAccount.js'
 
@@ -29,6 +30,18 @@ test('requestExecute', async () => {
       calldata: '0x',
       l2Value: 7_000_000_000n,
       l2GasLimit: 900_000n,
+    }),
+  ).toBeDefined()
+})
+
+test('deposit', async () => {
+  expect(
+    await walletClient.deposit({
+      client: clientL2,
+      token: legacyEthAddress,
+      to: walletClient.account.address,
+      refundRecipient: walletClient.account.address,
+      amount: 7_000_000_000n,
     }),
   ).toBeDefined()
 })
