@@ -1816,6 +1816,10 @@ export const sidebar = {
             text: 'finalizeWithdrawal',
             link: '/zksync/actions/finalizeWithdrawal',
           },
+          {
+            text: 'deposit',
+            link: '/zksync/actions/deposit',
+          },
         ],
       },
       {
