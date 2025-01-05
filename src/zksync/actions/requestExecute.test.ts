@@ -1,10 +1,27 @@
 import { expect, test } from 'vitest'
 import { anvilMainnet, anvilZksync } from '~test/src/anvil.js'
 import { accounts } from '~test/src/constants.js'
-import { mockRequestReturnData } from '~test/src/zksync.js'
+import {
+  approveToken,
+  mockRequestReturnData,
+  zksyncAccounts,
+} from '~test/src/zksync.js'
 import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
-import { type EIP1193RequestFn, publicActions } from '~viem/index.js'
-import { publicActionsL2 } from '~viem/zksync/index.js'
+import { readContract } from '~viem/actions/public/readContract.js'
+import {
+  http,
+  type EIP1193RequestFn,
+  createPublicClient,
+  publicActions,
+} from '~viem/index.js'
+import { bridgehubAbi } from '~viem/zksync/constants/abis.js'
+import {
+  getL2HashFromPriorityOp,
+  publicActionsL2,
+  zksyncLocalCustomHyperchain,
+  zksyncLocalHyperchain,
+  zksyncLocalHyperchainL1,
+} from '~viem/zksync/index.js'
 import { requestExecute } from './requestExecute.js'
 
 const request = (async ({ method, params }) => {
@@ -78,6 +95,118 @@ test('errors: no account provided', async () => {
   await expect(() =>
     requestExecute(client, {
       client: clientL2,
+      contractAddress: bridgehub,
+      calldata: '0x',
+      l2Value: 7_000_000_000n,
+      l2GasLimit: 900_000n,
+    }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`
+      [AccountNotFoundError: Could not find an Account to execute with this Action.
+      Please provide an Account with the \`account\` argument on the Action, or by supplying an \`account\` to the Client.
+
+      Docs: https://viem.sh/docs/actions/wallet/sendTransaction
+      Version: viem@x.y.z]
+  `)
+})
+
+const hyperchainClient = createPublicClient({
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+const hyperchainL2Client = createPublicClient({
+  chain: zksyncLocalCustomHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+const hyperchainL1Client = createPublicClient({
+  chain: zksyncLocalHyperchainL1,
+  transport: http(),
+})
+
+const account = privateKeyToAccount(zksyncAccounts[0].privateKey)
+
+test('ETH: request execute', async () => {
+  const amount = 7_000_000_000n
+  const l1BalanceBeforeExecution = await hyperchainL1Client.getBalance(account)
+  const l2BalanceBeforeExecution = await hyperchainClient.getBalance(account)
+
+  const hash = await requestExecute(hyperchainL1Client, {
+    client: hyperchainClient,
+    account,
+    contractAddress: await hyperchainClient.getBridgehubContractAddress(),
+    calldata: '0x',
+    l2Value: amount,
+    l2GasLimit: 900_000n,
+  })
+  const receipt = await hyperchainL1Client.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  const l2Hash = getL2HashFromPriorityOp(
+    receipt,
+    await hyperchainClient.getMainContractAddress(),
+  )
+  expect(l2Hash).toBeDefined()
+  const l2Receipt = await hyperchainClient.waitForTransactionReceipt({
+    hash: l2Hash,
+  })
+  expect(l2Receipt.status).equals('success')
+
+  const l1BalanceAfterExecution = await hyperchainL1Client.getBalance(account)
+  const l2BalanceAfterExecution = await hyperchainClient.getBalance(account)
+  expect(l1BalanceBeforeExecution - l1BalanceAfterExecution >= amount).true
+  expect(l2BalanceAfterExecution - l2BalanceBeforeExecution >= amount).true
+})
+
+test('Custom: request execute', async () => {
+  const amount = 7_000_000_000n
+  const baseToken = await readContract(hyperchainL1Client, {
+    address: await hyperchainL2Client.getBridgehubContractAddress(),
+    abi: bridgehubAbi,
+    functionName: 'baseToken',
+    args: [BigInt(hyperchainL2Client.chain.id)],
+  })
+
+  const l1BalanceBeforeExecution = await hyperchainL1Client.getBalance(account)
+  const l2BalanceBeforeExecution = await hyperchainL2Client.getBalance(account)
+
+  await approveToken(
+    hyperchainL1Client.chain,
+    baseToken,
+    (await hyperchainL2Client.getDefaultBridgeAddresses()).sharedL1,
+    500_000_000_000_000n,
+  )
+
+  const hash = await requestExecute(hyperchainL1Client, {
+    client: hyperchainL2Client,
+    account,
+    contractAddress: account.address,
+    calldata: '0x',
+    l2Value: amount,
+    l2GasLimit: 1_319_957n,
+  })
+  const receipt = await hyperchainL1Client.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+  const l2Hash = getL2HashFromPriorityOp(
+    receipt,
+    await hyperchainL2Client.getMainContractAddress(),
+  )
+  const l2Receipt = await hyperchainL2Client.waitForTransactionReceipt({
+    hash: l2Hash,
+  })
+  expect(l2Receipt.status).equals('success')
+
+  const l1BalanceAfterExecution = await hyperchainL1Client.getBalance(account)
+  const l2BalanceAfterExecution = await hyperchainL2Client.getBalance(account)
+  expect(l1BalanceBeforeExecution - l1BalanceAfterExecution >= amount).true
+  expect(l2BalanceAfterExecution - l2BalanceBeforeExecution >= amount).true
+})
+
+test('errors: no account provided', async () => {
+  const bridgehub = await hyperchainClient.getBridgehubContractAddress()
+  await expect(() =>
+    requestExecute(hyperchainL1Client, {
+      client: hyperchainClient,
       contractAddress: bridgehub,
       calldata: '0x',
       l2Value: 7_000_000_000n,
