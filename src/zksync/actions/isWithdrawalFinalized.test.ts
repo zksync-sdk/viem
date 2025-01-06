@@ -1,9 +1,29 @@
 import { expect, test } from 'vitest'
 
 import { anvilMainnet, anvilZksync } from '~test/src/anvil.js'
-import { mockRequestReturnData } from '~test/src/zksync.js'
-import { type EIP1193RequestFn, publicActions } from '../../index.js'
-import { publicActionsL2 } from '../index.js'
+import {
+  daiL1,
+  mockRequestReturnData,
+  zksyncAccounts,
+} from '~test/src/zksync.js'
+import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
+import {
+  http,
+  type EIP1193RequestFn,
+  createClient,
+  publicActions,
+} from '~viem/index.js'
+import { wait } from '~viem/utils/wait.js'
+import {
+  getL2TokenAddress,
+  l2BaseTokenAddress,
+  legacyEthAddress,
+  publicActionsL2,
+  withdraw,
+  zksyncLocalCustomHyperchain,
+  zksyncLocalHyperchain,
+  zksyncLocalHyperchainL1,
+} from '~viem/zksync/index.js'
 import { finalizeWithdrawal } from './finalizeWithdrawal.js'
 import { isWithdrawalFinalized } from './isWithdrawalFinalized.js'
 
@@ -61,4 +81,313 @@ test('default: account hoisting', async () => {
       hash: '0x08ac22b6d5d048ae8a486aa41a058bb01d82bdca6489760414aa15f61f27b943',
     }),
   ).toBeDefined()
+})
+
+const hyperchainClient = createClient({
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(publicActions)
+
+const customHyperchainClient = createClient({
+  chain: zksyncLocalCustomHyperchain,
+  transport: http(),
+}).extend(publicActions)
+
+const hyperchainL1Client = createClient({
+  chain: zksyncLocalHyperchainL1,
+  transport: http(),
+}).extend(publicActions)
+
+const account = privateKeyToAccount(zksyncAccounts[0].privateKey)
+
+test('ETH: not finalized withdrawal', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  // wait for 5 seconds for tx to be in finalized state
+  await wait(5_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).false
+})
+
+test('ETH: finalized withdrawal', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  // wait for 20 seconds for batch to be submitted on L1
+  await wait(20_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).false
+
+  const finalizeHash = await finalizeWithdrawal(hyperchainL1Client, {
+    account,
+    client: hyperchainClient,
+    hash,
+  })
+  const finalizeReceipt = await hyperchainL1Client.waitForTransactionReceipt({
+    hash: finalizeHash,
+  })
+  expect(finalizeReceipt.status).equals('success')
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).true
+})
+
+test('ETH: not finalized withdrawal using account hoisting', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  // wait for 5 seconds for tx to be in finalized state
+  await wait(5_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).false
+})
+
+test('ETH: not finalized DAI token withdrawal', async () => {
+  const amount = 5n
+  const daiL2 = await getL2TokenAddress(hyperchainClient, { token: daiL1 })
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: daiL2,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  // wait for 5 seconds for tx to be in finalized state
+  await wait(5_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).false
+})
+
+test('ETH: finalized DAI token withdrawal', async () => {
+  const amount = 5n
+  const daiL2 = await getL2TokenAddress(hyperchainClient, { token: daiL1 })
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: daiL2,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  // wait for 20 seconds for batch to be submitted on L1
+  await wait(20_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).false
+
+  const finalizeHash = await finalizeWithdrawal(hyperchainL1Client, {
+    account,
+    client: hyperchainClient,
+    hash,
+  })
+  const finalizeReceipt = await hyperchainL1Client.waitForTransactionReceipt({
+    hash: finalizeHash,
+  })
+  expect(finalizeReceipt.status).equals('success')
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).true
+})
+
+test('ETH: log not found error', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(hyperchainClient, {
+    account,
+    amount,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+  await expect(() =>
+    isWithdrawalFinalized(hyperchainL1Client, {
+      client: hyperchainClient,
+      hash,
+    }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`
+    [WithdrawalLogNotFoundError: Withdrawal log with hash ${hash} not found.
+
+    Either the withdrawal transaction is still processing or it did not finish successfully.
+
+    Version: viem@x.y.z]
+  `)
+})
+
+test('Custom: not finalized withdrawal', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(customHyperchainClient, {
+    account,
+    amount,
+    token: l2BaseTokenAddress,
+  })
+
+  const receipt = await customHyperchainClient.waitForTransactionReceipt({
+    hash,
+  })
+  expect(receipt.status).equals('success')
+
+  // wait for 5 seconds for tx to be in finalized state
+  await wait(5_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: customHyperchainClient,
+      hash,
+    }),
+  ).false
+})
+
+test('Custom: finalized withdrawal', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(customHyperchainClient, {
+    account,
+    amount,
+    token: l2BaseTokenAddress,
+  })
+
+  const receipt = await customHyperchainClient.waitForTransactionReceipt({
+    hash,
+  })
+  expect(receipt.status).equals('success')
+
+  // wait for 20 seconds for batch to be submitted on L1
+  await wait(20_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: customHyperchainClient,
+      hash,
+    }),
+  ).false
+
+  const finalizeHash = await finalizeWithdrawal(hyperchainL1Client, {
+    client: customHyperchainClient,
+    account,
+    hash,
+  })
+  const finalizeReceipt = await hyperchainL1Client.waitForTransactionReceipt({
+    hash: finalizeHash,
+  })
+  expect(finalizeReceipt.status).equals('success')
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: customHyperchainClient,
+      hash,
+    }),
+  ).true
+})
+
+test('Custom: not finalized withdrawal using account hoisting', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(customHyperchainClient, {
+    account,
+    amount,
+    token: l2BaseTokenAddress,
+  })
+
+  const receipt = await customHyperchainClient.waitForTransactionReceipt({
+    hash,
+  })
+  expect(receipt.status).equals('success')
+
+  // wait for 5 seconds for tx to be in finalized state
+  await wait(5_000)
+
+  expect(
+    await isWithdrawalFinalized(hyperchainL1Client, {
+      client: customHyperchainClient,
+      hash,
+    }),
+  ).false
+})
+
+test('Custom: log not found error', async () => {
+  const amount = 7_000_000_000n
+
+  const hash = await withdraw(customHyperchainClient, {
+    account,
+    amount,
+    token: l2BaseTokenAddress,
+  })
+
+  const receipt = await customHyperchainClient.waitForTransactionReceipt({
+    hash,
+  })
+  expect(receipt.status).equals('success')
+  await expect(() =>
+    isWithdrawalFinalized(hyperchainL1Client, {
+      client: customHyperchainClient,
+      hash,
+    }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`
+    [WithdrawalLogNotFoundError: Withdrawal log with hash ${hash} not found.
+
+    Either the withdrawal transaction is still processing or it did not finish successfully.
+
+    Version: viem@x.y.z]
+  `)
 })
