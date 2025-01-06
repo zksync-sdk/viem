@@ -1,9 +1,20 @@
 import { expect, test } from 'vitest'
 
 import { anvilZksync } from '~test/src/anvil.js'
-import { mockRequestReturnData } from '~test/src/zksync.js'
-import type { EIP1193RequestFn } from '~viem/index.js'
-import { legacyEthAddress } from '~viem/zksync/index.js'
+
+import {
+  approvalToken,
+  mockRequestReturnData,
+  paymaster,
+  zksyncAccounts,
+} from '~test/src/zksync.js'
+import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
+import { http, type EIP1193RequestFn, createWalletClient } from '~viem/index.js'
+import {
+  getApprovalBasedPaymasterInput,
+  legacyEthAddress,
+  zksyncLocalHyperchain,
+} from '~viem/zksync/index.js'
 import { walletActionsL2 } from './walletL2.js'
 
 const baseClient = anvilZksync.getClient({
@@ -34,6 +45,27 @@ test('withdraw', async () => {
     await client.withdraw({
       amount: 7_000_000_000n,
       token: legacyEthAddress,
+    }),
+  ).toBeDefined()
+})
+
+const hyperchainWalletClient = createWalletClient({
+  account: privateKeyToAccount(zksyncAccounts[0].privateKey),
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(walletActionsL2())
+
+test('hyperchain: withdraw', async () => {
+  expect(
+    await hyperchainWalletClient.withdraw({
+      amount: 7_000_000_000n,
+      token: legacyEthAddress,
+      paymaster: paymaster,
+      paymasterInput: getApprovalBasedPaymasterInput({
+        minAllowance: 1n,
+        token: approvalToken,
+        innerInput: new Uint8Array(),
+      }),
     }),
   ).toBeDefined()
 })
