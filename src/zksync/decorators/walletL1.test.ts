@@ -8,9 +8,12 @@ import {
   createPublicClient,
   createWalletClient,
 } from '~viem/index.js'
+import { wait } from '~viem/utils/wait.js'
 import {
+  legacyEthAddress,
   publicActionsL2,
   walletActionsL1,
+  withdraw,
   zksyncLocalHyperchain,
   zksyncLocalHyperchainL1,
 } from '~viem/zksync/index.js'
@@ -87,6 +90,29 @@ test('hyperchain: requestExecute', async () => {
       calldata: '0x',
       l2Value: 7_000_000_000n,
       l2GasLimit: 900_000n,
+    }),
+  ).toBeDefined()
+})
+
+test('hyperchain: finalizeWithdrawal', async () => {
+  const hash = await withdraw(hyperchainClient, {
+    account: privateKeyToAccount(zksyncAccounts[0].privateKey),
+    amount: 7_000_000_000n,
+    token: legacyEthAddress,
+  })
+
+  const receipt = await hyperchainClient.waitForTransactionReceipt({
+    hash: hash,
+  })
+  expect(receipt.status).equals('success')
+
+  // wait for 20 seconds for tx to be in finalized state
+  await wait(20_000)
+
+  expect(
+    await hyperchainL1WalletClient.finalizeWithdrawal({
+      client: hyperchainClient,
+      hash,
     }),
   ).toBeDefined()
 })
