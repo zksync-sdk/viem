@@ -16,8 +16,10 @@ import {
 } from '~viem/index.js'
 import { wait } from '~viem/utils/wait.js'
 import { getBaseTokenL1Address } from '~viem/zksync/actions/getBaseTokenL1Address.js'
+import { l2SharedBridgeAbi } from '~viem/zksync/constants/abis.js'
 import { ethAddressInContracts } from '~viem/zksync/constants/address.js'
 import {
+  type ZksyncTransaction,
   type ZksyncTransactionReceipt,
   deployContract,
   getBridgehubContractAddress,
@@ -401,6 +403,22 @@ const mockedReceipt: ZksyncTransactionReceipt = {
         '0x15c295874fe9ad8f6708def4208119c68999f7a76ac6447c111e658ba6bfaa1e',
       logIndex: 0n,
     },
+    {
+      blockNumber: 40n,
+      blockHash:
+        '0x395fdbf0faa12cb49438dcbcf96ddb130b8c0730dd0a0dd6999e247e2c2bca85',
+      l1BatchNumber: 22n,
+      transactionIndex: 0n,
+      shardId: 0n,
+      isService: true,
+      sender: '0x0000000000000000000000000000000000008001',
+      key: '0x08ac22b6d5d048ae8a486aa41a058bb01d82bdca6489760414aa15f61f27b943',
+      value:
+        '0x0000000000000000000000000000000000000000000000000000000000000000',
+      transactionHash:
+        '0x15c295874fe9ad8f6708def4208119c68999f7a76ac6447c111e658ba6bfaa1e',
+      logIndex: 0n,
+    },
   ],
   status: 'success',
   root: '0x395fdbf0faa12cb49438dcbcf96ddb130b8c0730dd0a0dd6999e247e2c2bca85',
@@ -408,6 +426,38 @@ const mockedReceipt: ZksyncTransactionReceipt = {
     '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
   type: 'eip1559',
   effectiveGasPrice: 100000000n,
+}
+
+export const mockedTransaction: ZksyncTransaction = {
+  hash: '0x9ae6ddcfb3c2582f313c547a1edd1b15c926d863ad8c595b7b490d710d241981',
+  nonce: 13,
+  blockHash:
+    '0x565262e637c010daf995b3d39509847dca34423940152da90866f8e8bb06878b',
+  blockNumber: 57n,
+  transactionIndex: 0,
+  from: '0x36615cf349d7f6344891b1e7ca7c72883f5dc049',
+  to: '0x000000000000000000000000000000000000800a',
+  value: 7000000000n,
+  gas: 264270n,
+  input: encodeAbiParameters(l2SharedBridgeAbi[2].inputs, [
+    '0x36615Cf349d7F6344891B1e7CA7C72883F5dc049',
+    '0x36615Cf349d7F6344891B1e7CA7C72883F5dc049',
+    '0x2dc3685cA34163952CF4A5395b0039c00DFa851D',
+    500n,
+    '0x0',
+  ]),
+  v: 0n,
+  r: '0x72cafc67120b2e2da45204e46aba769aa8135cb1e2bd13a49282278b9f5dbc74',
+  s: '0x694bb8c688b0c4dfe6b0da24ec131d193251965004942870be90e66720a0024',
+  type: 'eip1559',
+  maxFeePerGas: 120000000n,
+  maxPriorityFeePerGas: 0n,
+  chainId: 270,
+  typeHex: '0x2',
+  yParity: 0,
+  l1BatchTxIndex: 1n,
+  l1BatchNumber: 40n,
+  accessList: [{ address: '0x10', storageKeys: ['0x10'] }],
 }
 
 export const mockRequestReturnData = async (method: string) => {
@@ -428,6 +478,7 @@ export const mockRequestReturnData = async (method: string) => {
   if (method === 'zks_L1BatchNumber') return mockedL1BatchNumber
   if (method === 'zks_estimateGasL1ToL2') return mockedGasEstimation
   if (method === 'eth_getTransactionReceipt') return mockedReceipt
+  if (method === 'eth_getTransactionByHash') return mockedTransaction
   return undefined
 }
 

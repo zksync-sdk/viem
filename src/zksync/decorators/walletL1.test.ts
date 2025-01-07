@@ -85,6 +85,15 @@ test('deposit', async () => {
   ).toBeDefined()
 })
 
+test('claimFailedDeposit', async () => {
+  expect(
+    await client.claimFailedDeposit({
+      client: zksyncClient,
+      hash: '0x08ac22b6d5d048ae8a486aa41a058bb01d82bdca6489760414aa15f61f27b943',
+    }),
+  ).toBeDefined()
+})
+
 const hyperchainL1WalletClient = createWalletClient({
   chain: zksyncLocalHyperchainL1,
   transport: http(),

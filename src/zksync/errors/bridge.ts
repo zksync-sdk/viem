@@ -61,3 +61,15 @@ export class L2ToL1MessageLogNotFoundError extends BaseError {
     )
   }
 }
+
+export type CannotClaimSuccessfulDepositErrorType =
+  BaseFeeHigherThanValueError & {
+    name: 'CannotClaimSuccessfulDepositError'
+  }
+export class CannotClaimSuccessfulDepositError extends BaseError {
+  constructor() {
+    super('Cannot claim successful deposit.', {
+      name: 'CannotClaimSuccessfulDepositError',
+    })
+  }
+}

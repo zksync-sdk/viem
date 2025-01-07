@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import {
   BaseFeeHigherThanValueError,
+  CannotClaimSuccessfulDepositError,
   L2ToL1MessageLogNotFoundError,
   TxHashNotFoundInLogsError,
   WithdrawalLogNotFoundError,
@@ -45,6 +46,14 @@ test('L2ToL1MessageLogNotFoundError', () => {
 
     Either the L2->L1 transaction is still processing or it did not finish successfully.
     
+    Version: viem@x.y.z]
+  `)
+})
+
+test('CannotClaimSuccessfulDepositError', () => {
+  expect(new CannotClaimSuccessfulDepositError()).toMatchInlineSnapshot(`
+    [CannotClaimSuccessfulDepositError: Cannot claim successful deposit.
+
     Version: viem@x.y.z]
   `)
 })

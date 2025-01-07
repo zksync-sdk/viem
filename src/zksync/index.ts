@@ -14,6 +14,12 @@ export {
 } from './accounts/toSinglesigSmartAccount.js'
 
 export {
+  type ClaimFailedDepositErrorType,
+  type ClaimFailedDepositReturnType,
+  type ClaimFailedDepositParameters,
+  claimFailedDeposit,
+} from './actions/claimFailedDeposit.js'
+export {
   type DeployContractErrorType,
   type DeployContractParameters,
   type DeployContractReturnType,
