@@ -130,3 +130,16 @@ test('hyperchain: finalizeWithdrawal', async () => {
     }),
   ).toBeDefined()
 })
+
+test('hyperchain: deposit', async () => {
+  const account = privateKeyToAccount(zksyncAccounts[0].privateKey)
+  expect(
+    await hyperchainL1WalletClient.deposit({
+      client: hyperchainClient,
+      token: legacyEthAddress,
+      to: account.address,
+      refundRecipient: account.address,
+      amount: 7_000_000_000n,
+    }),
+  ).toBeDefined()
+})
