@@ -1,10 +1,24 @@
 import { expect, test } from 'vitest'
 import { anvilMainnet, anvilZksync } from '~test/src/anvil.js'
 import { accounts } from '~test/src/constants.js'
-import { mockRequestReturnData } from '~test/src/zksync.js'
+import { mockRequestReturnData, zksyncAccounts } from '~test/src/zksync.js'
 import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
-import { type EIP1193RequestFn, publicActions } from '~viem/index.js'
-import { publicActionsL2 } from '~viem/zksync/index.js'
+import {
+  http,
+  type EIP1193RequestFn,
+  createPublicClient,
+  publicActions,
+} from '~viem/index.js'
+import { getBaseTokenL1Address } from '~viem/zksync/actions/getBaseTokenL1Address.js'
+import {
+  deposit,
+  getL2HashFromPriorityOp,
+  legacyEthAddress,
+  publicActionsL2,
+  zksyncLocalCustomHyperchain,
+  zksyncLocalHyperchain,
+  zksyncLocalHyperchainL1,
+} from '~viem/zksync/index.js'
 import { claimFailedDeposit } from './claimFailedDeposit.js'
 
 const request = (async ({ method, params }) => {
@@ -62,4 +76,92 @@ test('default: account hoisting', async () => {
       hash: '0x08ac22b6d5d048ae8a486aa41a058bb01d82bdca6489760414aa15f61f27b943',
     }),
   ).toBeDefined()
+})
+
+const hyperchainClient = createPublicClient({
+  chain: zksyncLocalHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+const hyperchainCustomClient = createPublicClient({
+  chain: zksyncLocalCustomHyperchain,
+  transport: http(),
+}).extend(publicActionsL2())
+
+const hyperchainL1Client = createPublicClient({
+  chain: zksyncLocalHyperchainL1,
+  transport: http(),
+})
+
+const account = privateKeyToAccount(zksyncAccounts[0].privateKey)
+
+test('ETH: cannot claim successful deposit', async () => {
+  const hash = await deposit(hyperchainL1Client, {
+    client: hyperchainClient,
+    account,
+    token: legacyEthAddress,
+    to: account.address,
+    amount: 7_000_000_000n,
+    refundRecipient: account.address,
+  })
+  const receipt = await hyperchainL1Client.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  const l2Hash = getL2HashFromPriorityOp(
+    receipt,
+    await hyperchainClient.getMainContractAddress(),
+  )
+  expect(l2Hash).toBeDefined()
+  const l2Receipt = await hyperchainClient.waitForTransactionReceipt({
+    hash: l2Hash,
+  })
+  expect(l2Receipt.status).equals('success')
+
+  await expect(() =>
+    claimFailedDeposit(hyperchainL1Client, {
+      account,
+      client: hyperchainClient,
+      hash: l2Hash,
+    }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`
+    [CannotClaimSuccessfulDepositError: Cannot claim successful deposit.
+
+    Version: viem@x.y.z]
+  `)
+})
+
+test('Custom: cannot claim successful deposit', async () => {
+  const hash = await deposit(hyperchainL1Client, {
+    client: hyperchainCustomClient,
+    account,
+    token: await getBaseTokenL1Address(hyperchainCustomClient),
+    to: account.address,
+    amount: 5n,
+    approveToken: true,
+    refundRecipient: account.address,
+  })
+  const receipt = await hyperchainL1Client.waitForTransactionReceipt({ hash })
+  expect(receipt.status).equals('success')
+
+  const l2Hash = getL2HashFromPriorityOp(
+    receipt,
+    await hyperchainCustomClient.getMainContractAddress(),
+  )
+  expect(l2Hash).toBeDefined()
+  const l2Receipt = await hyperchainCustomClient.waitForTransactionReceipt({
+    hash: l2Hash,
+  })
+  expect(l2Receipt.status).equals('success')
+
+  await expect(() =>
+    claimFailedDeposit(hyperchainL1Client, {
+      account,
+      client: hyperchainCustomClient,
+      hash: l2Hash,
+    }),
+  ).rejects.toThrowErrorMatchingInlineSnapshot(`
+    [CannotClaimSuccessfulDepositError: Cannot claim successful deposit.
+
+    Version: viem@x.y.z]
+  `)
 })
