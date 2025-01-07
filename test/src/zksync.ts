@@ -385,6 +385,22 @@ const mockedReceipt: ZksyncTransactionReceipt = {
         '0x15c295874fe9ad8f6708def4208119c68999f7a76ac6447c111e658ba6bfaa1e',
       logIndex: 0n,
     },
+    {
+      blockNumber: 40n,
+      blockHash:
+        '0x395fdbf0faa12cb49438dcbcf96ddb130b8c0730dd0a0dd6999e247e2c2bca85',
+      l1BatchNumber: 22n,
+      transactionIndex: 0n,
+      shardId: 0n,
+      isService: true,
+      sender: '0x0000000000000000000000000000000000008001',
+      key: '0x000000000000000000000000000000000000000000000000000000000000800a',
+      value:
+        '0x0bc337b42226405c56d0c4db2bd874946831bd2b0b00e51e72d0cf430165fe7f',
+      transactionHash:
+        '0x15c295874fe9ad8f6708def4208119c68999f7a76ac6447c111e658ba6bfaa1e',
+      logIndex: 0n,
+    },
   ],
   status: 'success',
   root: '0x395fdbf0faa12cb49438dcbcf96ddb130b8c0730dd0a0dd6999e247e2c2bca85',

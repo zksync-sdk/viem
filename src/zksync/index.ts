@@ -85,6 +85,12 @@ export {
 } from './actions/getLogProof.js'
 export { getMainContractAddress } from './actions/getMainContractAddress.js'
 export {
+  type GetPriorityOpConfirmationErrorType,
+  type GetPriorityOpConfirmationReturnType,
+  type GetPriorityOpConfirmationParameters,
+  getPriorityOpConfirmation,
+} from './actions/getPriorityOpConfirmation.js'
+export {
   type GetRawBlockTransactionsParameters,
   type GetRawBlockTransactionsReturnType,
   getRawBlockTransactions,

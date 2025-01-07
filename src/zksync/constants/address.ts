@@ -17,3 +17,6 @@ export const l2BaseTokenAddress =
 
 export const l1MessengerAddress =
   '0x0000000000000000000000000000000000008008' as const
+
+export const bootloaderFormalAddress =
+  '0x0000000000000000000000000000000000008001' as const

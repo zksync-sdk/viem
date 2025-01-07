@@ -44,3 +44,20 @@ export class WithdrawalLogNotFoundError extends BaseError {
     )
   }
 }
+
+export type L2ToL1MessageLogNotFoundErrorType =
+  L2ToL1MessageLogNotFoundError & {
+    name: 'L2ToL1MessageLogNotFoundError'
+  }
+export class L2ToL1MessageLogNotFoundError extends BaseError {
+  constructor({ hash }: { hash: Hash }) {
+    super(
+      [
+        `L2->L1 message log with hash ${hash} not found.`,
+        '',
+        'Either the L2->L1 transaction is still processing or it did not finish successfully.',
+      ].join('\n'),
+      { name: 'L2ToL1MessageLogNotFoundError' },
+    )
+  }
+}

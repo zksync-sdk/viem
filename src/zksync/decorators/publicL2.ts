@@ -72,6 +72,11 @@ import {
   getMainContractAddress,
 } from '../actions/getMainContractAddress.js'
 import {
+  type GetPriorityOpConfirmationParameters,
+  type GetPriorityOpConfirmationReturnType,
+  getPriorityOpConfirmation,
+} from '../actions/getPriorityOpConfirmation.js'
+import {
   type GetRawBlockTransactionsParameters,
   type GetRawBlockTransactionsReturnType,
   getRawBlockTransactions,
@@ -167,6 +172,29 @@ export type PublicActionsL2<
    * const address = await client.getMainContractAddress();
    */
   getMainContractAddress: () => Promise<GetMainContractAddressReturnType>
+
+  /**
+   * Returns the transaction confirmation data that is part of `L2->L1` message.
+   *
+   * @param client - Client to use
+   * @param args - {@link GetPriorityOpConfirmationParameters}
+   * @returns The transaction confirmation data that is part of `L2->L1` message.
+   *
+   * @example
+   * import { createPublicClient, http } from 'viem'
+   * import { zksync } from 'viem/chains'
+   * import { publicActionsL2 } from 'viem/zksync'
+   *
+   * const client = createPublicClient({
+   *   chain: zksync,
+   *   transport: http(),
+   * }).extend(publicActionsL2())
+   *
+   * const address = await client.getPriorityOpConfirmation({hash: '0x...'})
+   */
+  getPriorityOpConfirmation: (
+    args: GetPriorityOpConfirmationParameters,
+  ) => Promise<GetPriorityOpConfirmationReturnType>
 
   /**
    * Returns all known balances for a given account.
@@ -487,6 +515,8 @@ export function publicActionsL2() {
       getTestnetPaymasterAddress: () => getTestnetPaymasterAddress(client),
       getL1ChainId: () => getL1ChainId(client),
       getMainContractAddress: () => getMainContractAddress(client),
+      getPriorityOpConfirmation: (args) =>
+        getPriorityOpConfirmation(client, args),
       getAllBalances: (args) => getAllBalances(client, args),
       getRawBlockTransaction: (args) => getRawBlockTransactions(client, args),
       getBlockDetails: (args) => getBlockDetails(client, args),

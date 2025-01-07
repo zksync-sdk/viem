@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest'
 import {
   BaseFeeHigherThanValueError,
+  L2ToL1MessageLogNotFoundError,
   TxHashNotFoundInLogsError,
   WithdrawalLogNotFoundError,
 } from '~viem/zksync/errors/bridge.js'
@@ -31,6 +32,18 @@ test('WithdrawalLogNotFoundError', () => {
     [WithdrawalLogNotFoundError: Withdrawal log with hash ${hash} not found.
 
     Either the withdrawal transaction is still processing or it did not finish successfully.
+    
+    Version: viem@x.y.z]
+  `)
+})
+
+test('L2ToL1MessageLogNotFoundError', () => {
+  const hash =
+    '0x9afe47f3d95eccfc9210851ba5f877f76d372514a26b48bad848a07f77c33b87'
+  expect(new L2ToL1MessageLogNotFoundError({ hash })).toMatchInlineSnapshot(`
+    [L2ToL1MessageLogNotFoundError: L2->L1 message log with hash ${hash} not found.
+
+    Either the L2->L1 transaction is still processing or it did not finish successfully.
     
     Version: viem@x.y.z]
   `)

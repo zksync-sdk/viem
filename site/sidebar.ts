@@ -1758,6 +1758,10 @@ export const sidebar = {
             link: '/zksync/actions/getMainContractAddress',
           },
           {
+            text: 'getPriorityOpConfirmation',
+            link: '/zksync/actions/getPriorityOpConfirmation',
+          },
+          {
             text: 'getRawBlockTransaction',
             link: '/zksync/actions/getRawBlockTransactions',
           },
