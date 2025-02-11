@@ -74,7 +74,8 @@ export type DepositParameters<
     token: Address
     /** The amount of the token to deposit. */
     amount: bigint
-    /** The address that will receive the deposited tokens on L2. */
+    /** The address that will receive the deposited tokens on L2.
+    Defaults to the sender address.*/
     to?: Address
     /** (currently not used) The tip the operator will receive on top of
     the base cost of the transaction. */
@@ -248,28 +249,6 @@ export async function deposit<
   const isETHBasedChain = isAddressEqual(baseToken, ethAddressInContracts)
 
   to ??= account.address
-  l2GasLimit = bridgeAddress
-    ? await getL2GasLimitFromCustomBridge(
-        client,
-        l2Client,
-        account.address,
-        token,
-        amount,
-        to,
-        gasPerPubdataByte,
-        bridgeAddress,
-        customBridgeData,
-      )
-    : await getL2GasLimitFromDefaultBridge(
-        client,
-        l2Client,
-        account.address,
-        token,
-        amount,
-        to,
-        gasPerPubdataByte,
-        baseToken,
-      )
   let gasPriceForEstimation = maxFeePerGas || gasPrice
   if (!gasPriceForEstimation) {
     const estimatedFee = await getFeePrice(client)
@@ -278,17 +257,22 @@ export async function deposit<
     maxPriorityFeePerGas ??= estimatedFee.maxPriorityFeePerGas
   }
 
-  const baseCost = await readContract(client, {
-    address: bridgehub,
-    abi: bridgehubAbi,
-    functionName: 'l2TransactionBaseCost',
-    args: [
-      BigInt(l2Client.chain.id),
-      gasPriceForEstimation,
-      l2GasLimit,
-      gasPerPubdataByte,
-    ],
-  })
+  const { l2GasLimit_, baseCost } = await getL2BridgeTxFeeParams(
+    client,
+    l2Client,
+    bridgehub,
+    gasPriceForEstimation,
+    account.address,
+    token,
+    amount,
+    to,
+    gasPerPubdataByte,
+    baseToken,
+    l2GasLimit,
+    bridgeAddress,
+    customBridgeData,
+  )
+  l2GasLimit = l2GasLimit_
 
   if (isETHBasedChain && isAddressEqual(token, ethAddressInContracts)) {
     // Deposit ETH on ETH-based chain
@@ -344,26 +328,19 @@ export async function deposit<
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
     bridgeAddress ??= bridgeAddresses.sharedL1
-    if (approveToken) {
-      const overrides = typeof approveToken === 'boolean' ? {} : approveToken
-      const allowance = await getL1Allowance(client, {
-        token,
-        bridgeAddress,
-        account,
-      })
-      if (allowance < amount) {
-        const hash = await writeContract(client, {
-          chain: chain_,
-          account,
-          address: token,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [bridgeAddress, amount],
-          ...overrides,
-        } satisfies WriteContractParameters as any)
-        await waitForTransactionReceipt(client, { hash })
-      }
-    }
+
+    await approveTokens(
+      client,
+      chain_,
+      bridgeAddress,
+      baseToken,
+      mintValue,
+      account,
+      token,
+      amount,
+      approveToken,
+      approveBaseToken,
+    )
 
     const data = encodeFunctionData({
       abi: bridgehubAbi,
@@ -416,26 +393,19 @@ export async function deposit<
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
     bridgeAddress = bridgeAddresses.sharedL1
-    if (approveBaseToken) {
-      const overrides = typeof approveToken === 'boolean' ? {} : approveToken
-      const allowance = await getL1Allowance(client, {
-        token: baseToken,
-        bridgeAddress,
-        account,
-      })
-      if (allowance < mintValue) {
-        const hash = await writeContract(client, {
-          chain: chain_,
-          account,
-          address: baseToken,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [bridgeAddress, mintValue],
-          ...overrides,
-        } satisfies WriteContractParameters as any)
-        await waitForTransactionReceipt(client, { hash })
-      }
-    }
+
+    await approveTokens(
+      client,
+      chain_,
+      bridgeAddress,
+      baseToken,
+      mintValue,
+      account,
+      token,
+      amount,
+      approveToken,
+      approveBaseToken,
+    )
 
     const data = encodeFunctionData({
       abi: bridgehubAbi,
@@ -488,31 +458,19 @@ export async function deposit<
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
     bridgeAddress = bridgeAddresses.sharedL1
-    if (approveToken || approveBaseToken) {
-      const overrides =
-        typeof approveToken === 'boolean'
-          ? {}
-          : (approveToken ?? typeof approveBaseToken === 'boolean')
-            ? {}
-            : approveBaseToken
-      const allowance = await getL1Allowance(client, {
-        token: baseToken,
-        bridgeAddress,
-        account,
-      })
-      if (allowance < mintValue) {
-        const hash = await writeContract(client, {
-          chain: chain_,
-          account,
-          address: baseToken,
-          abi: erc20Abi,
-          functionName: 'approve',
-          args: [bridgeAddress, mintValue],
-          ...overrides,
-        } satisfies WriteContractParameters as any)
-        await waitForTransactionReceipt(client, { hash })
-      }
-    }
+
+    await approveTokens(
+      client,
+      chain_,
+      bridgeAddress,
+      baseToken,
+      mintValue,
+      account,
+      token,
+      amount,
+      approveToken,
+      approveBaseToken,
+    )
 
     if (!gas) {
       const baseGasLimit = await estimateGas(client, {
@@ -566,47 +524,19 @@ export async function deposit<
     throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
   bridgeAddress ??= bridgeAddresses.sharedL1
-  if (approveBaseToken) {
-    const overrides = typeof approveToken === 'boolean' ? {} : approveToken
-    const allowance = await getL1Allowance(client, {
-      token: baseToken,
-      bridgeAddress: bridgeAddresses.sharedL1,
-      account,
-    })
-    if (allowance < mintValue) {
-      const hash = await writeContract(client, {
-        chain: chain_,
-        account,
-        address: baseToken,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [bridgeAddresses.sharedL1, mintValue],
-        ...overrides,
-      } satisfies WriteContractParameters as any)
-      await waitForTransactionReceipt(client, { hash })
-    }
-  }
 
-  if (approveToken) {
-    const overrides = typeof approveToken === 'boolean' ? {} : approveToken
-    const allowance = await getL1Allowance(client, {
-      token,
-      bridgeAddress,
-      account,
-    })
-    if (allowance < amount) {
-      const hash = await writeContract(client, {
-        chain: chain_,
-        account,
-        address: token,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [bridgeAddress, amount],
-        ...overrides,
-      } satisfies WriteContractParameters as any)
-      await waitForTransactionReceipt(client, { hash })
-    }
-  }
+  await approveTokens(
+    client,
+    chain_,
+    bridgeAddress,
+    baseToken,
+    mintValue,
+    account,
+    token,
+    amount,
+    approveToken,
+    approveBaseToken,
+  )
 
   const data = encodeFunctionData({
     abi: bridgehubAbi,
@@ -653,6 +583,212 @@ export async function deposit<
   } as SendTransactionParameters)
 }
 
+async function approveTokens<
+  chain extends Chain | undefined,
+  chainOverride extends Chain | undefined = Chain | undefined,
+  _derivedChain extends Chain | undefined = DeriveChain<chain, chainOverride>,
+>(
+  client: Client<Transport, chain>,
+  chain: Chain | null | undefined,
+  bridgeAddress: Address,
+  baseToken: Address,
+  mintValue: bigint,
+  account: Account,
+  token: Address,
+  amount: bigint,
+  approveToken?:
+    | boolean
+    | UnionEvaluate<
+        UnionOmit<
+          FormattedTransactionRequest<_derivedChain>,
+          'data' | 'to' | 'from'
+        >
+      >,
+  approveBaseToken?:
+    | boolean
+    | UnionEvaluate<
+        UnionOmit<
+          FormattedTransactionRequest<_derivedChain>,
+          'data' | 'to' | 'from'
+        >
+      >,
+) {
+  if (isAddressEqual(baseToken, ethAddressInContracts)) {
+    // Deposit token on ETH-based chain
+    if (approveToken) {
+      const overrides = typeof approveToken === 'boolean' ? {} : approveToken
+      const allowance = await getL1Allowance(client, {
+        token,
+        bridgeAddress,
+        account,
+      })
+      if (allowance < amount) {
+        const hash = await writeContract(client, {
+          chain,
+          account,
+          address: token,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [bridgeAddress, amount],
+          ...overrides,
+        } satisfies WriteContractParameters as any)
+        await waitForTransactionReceipt(client, { hash })
+      }
+    }
+  }
+
+  if (isAddressEqual(token, ethAddressInContracts)) {
+    // Deposit ETH on custom chain
+
+    if (approveBaseToken) {
+      const overrides = typeof approveToken === 'boolean' ? {} : approveToken
+      const allowance = await getL1Allowance(client, {
+        token: baseToken,
+        bridgeAddress,
+        account,
+      })
+      if (allowance < mintValue) {
+        const hash = await writeContract(client, {
+          chain,
+          account,
+          address: baseToken,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [bridgeAddress, mintValue],
+          ...overrides,
+        } satisfies WriteContractParameters as any)
+        await waitForTransactionReceipt(client, { hash })
+      }
+    }
+  }
+
+  if (isAddressEqual(token, baseToken)) {
+    // Deposit base token on custom chain
+    if (approveToken || approveBaseToken) {
+      const overrides =
+        typeof approveToken === 'boolean'
+          ? {}
+          : (approveToken ?? typeof approveBaseToken === 'boolean')
+            ? {}
+            : approveBaseToken
+      const allowance = await getL1Allowance(client, {
+        token: baseToken,
+        bridgeAddress,
+        account,
+      })
+      if (allowance < mintValue) {
+        const hash = await writeContract(client, {
+          chain,
+          account,
+          address: baseToken,
+          abi: erc20Abi,
+          functionName: 'approve',
+          args: [bridgeAddress, mintValue],
+          ...overrides,
+        } satisfies WriteContractParameters as any)
+        await waitForTransactionReceipt(client, { hash })
+      }
+    }
+  }
+
+  // Deposit token on custom chain
+  if (approveBaseToken) {
+    const overrides = typeof approveToken === 'boolean' ? {} : approveToken
+    const allowance = await getL1Allowance(client, {
+      token: baseToken,
+      bridgeAddress,
+      account,
+    })
+    if (allowance < mintValue) {
+      const hash = await writeContract(client, {
+        chain,
+        account,
+        address: baseToken,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [bridgeAddress, mintValue],
+        ...overrides,
+      } satisfies WriteContractParameters as any)
+      await waitForTransactionReceipt(client, { hash })
+    }
+  }
+
+  if (approveToken) {
+    const overrides = typeof approveToken === 'boolean' ? {} : approveToken
+    const allowance = await getL1Allowance(client, {
+      token,
+      bridgeAddress,
+      account,
+    })
+    if (allowance < amount) {
+      const hash = await writeContract(client, {
+        chain,
+        account,
+        address: token,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [bridgeAddress, amount],
+        ...overrides,
+      } satisfies WriteContractParameters as any)
+      await waitForTransactionReceipt(client, { hash })
+    }
+  }
+}
+
+async function getL2BridgeTxFeeParams<
+  chain extends Chain | undefined,
+  chainL2 extends ChainEIP712 | undefined,
+>(
+  client: Client<Transport, chain>,
+  l2Client: Client<Transport, chainL2>,
+  bridgehub: Address,
+  gasPrice: bigint,
+  from: Address,
+  token: Address,
+  amount: bigint,
+  to: Address,
+  gasPerPubdataByte: bigint,
+  baseToken: Address,
+  l2GasLimit?: bigint,
+  bridgeAddress?: Address,
+  customBridgeData?: Hex,
+) {
+  if (!l2Client.chain) throw new ClientChainNotConfiguredError()
+
+  let l2GasLimit_ = l2GasLimit
+  if (!l2GasLimit_)
+    l2GasLimit_ = bridgeAddress
+      ? await getL2GasLimitFromCustomBridge(
+          client,
+          l2Client,
+          from,
+          token,
+          amount,
+          to,
+          gasPerPubdataByte,
+          bridgeAddress,
+          customBridgeData,
+        )
+      : await getL2GasLimitFromDefaultBridge(
+          client,
+          l2Client,
+          from,
+          token,
+          amount,
+          to,
+          gasPerPubdataByte,
+          baseToken,
+        )
+
+  const baseCost = await readContract(client, {
+    address: bridgehub,
+    abi: bridgehubAbi,
+    functionName: 'l2TransactionBaseCost',
+    args: [BigInt(l2Client.chain.id), gasPrice, l2GasLimit_, gasPerPubdataByte],
+  })
+  return { l2GasLimit_, baseCost }
+}
+
 async function getL2GasLimitFromDefaultBridge<
   chain extends Chain | undefined,
   chainL2 extends ChainEIP712 | undefined,
@@ -664,9 +800,9 @@ async function getL2GasLimitFromDefaultBridge<
   amount: bigint,
   to: Address,
   gasPerPubdataByte: bigint,
-  baseTokenAddress: Address,
+  baseToken: Address,
 ) {
-  if (isAddressEqual(token, baseTokenAddress)) {
+  if (isAddressEqual(token, baseToken)) {
     return await estimateGasL1ToL2(l2Client, {
       chain: l2Client.chain,
       account: from,

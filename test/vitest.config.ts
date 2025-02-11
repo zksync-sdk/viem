@@ -33,6 +33,7 @@ export default defineConfig({
     include: [
       ...(process.env.TYPES ? ['**/*.bench-d.ts'] : []),
       'src/**/*.test.ts',
+      'test/scripts/zksync.test.ts',
     ],
     setupFiles: process.env.TYPES ? [] : [join(__dirname, './setup.ts')],
     globalSetup: process.env.TYPES
