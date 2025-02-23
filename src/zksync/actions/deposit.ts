@@ -635,11 +635,11 @@ async function approveTokens<
         await waitForTransactionReceipt(client, { hash })
       }
     }
+    return
   }
 
   if (isAddressEqual(token, ethAddressInContracts)) {
     // Deposit ETH on custom chain
-
     if (approveBaseToken) {
       const overrides = typeof approveToken === 'boolean' ? {} : approveToken
       const allowance = await getL1Allowance(client, {
@@ -659,6 +659,7 @@ async function approveTokens<
         } satisfies WriteContractParameters as any)
         await waitForTransactionReceipt(client, { hash })
       }
+      return
     }
   }
 
@@ -689,6 +690,7 @@ async function approveTokens<
         await waitForTransactionReceipt(client, { hash })
       }
     }
+    return
   }
 
   // Deposit token on custom chain
