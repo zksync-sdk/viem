@@ -49,12 +49,12 @@ import {
   type BaseFeeHigherThanValueErrorType,
 } from '../errors/bridge.js'
 import type { ChainEIP712 } from '../types/chain.js'
+import type { BridgeContractAddresses } from '../types/contract.js'
 import { applyL1ToL2Alias } from '../utils/bridge/applyL1ToL2Alias.js'
 import { estimateGasL1ToL2 } from './estimateGasL1ToL2.js'
 import { getBridgehubContractAddress } from './getBridgehubContractAddress.js'
 import { getDefaultBridgeAddresses } from './getDefaultBridgeAddresses.js'
 import { getL1Allowance } from './getL1Allowance.js'
-import { requestExecute } from './requestExecute.js'
 
 export type DepositParameters<
   chain extends Chain | undefined = Chain | undefined,
@@ -212,21 +212,9 @@ export async function deposit<
     client: l2Client,
     token,
     amount,
-    to,
-    operatorTip = 0n,
-    l2GasLimit,
-    gasPerPubdataByte = requiredL1ToL2GasPerPubdataLimit,
-    refundRecipient = ZeroAddress as Address,
-    bridgeAddress,
-    customBridgeData,
-    value,
-    gasPrice,
-    maxFeePerGas,
-    maxPriorityFeePerGas,
     approveToken,
     approveBaseToken,
     gas,
-    ...rest
   } = parameters
 
   const account = account_ ? parseAccount(account_) : client.account
@@ -246,7 +234,92 @@ export async function deposit<
     functionName: 'baseToken',
     args: [BigInt(l2Client.chain.id)],
   })
-  const isETHBasedChain = isAddressEqual(baseToken, ethAddressInContracts)
+
+  const { mintValue, tx } = await getL1DepositTx(
+    client,
+    account,
+    { ...parameters, token },
+    bridgeAddresses,
+    bridgehub,
+    baseToken,
+  )
+
+  await approveTokens(
+    client,
+    chain_,
+    tx.bridgeAddress,
+    baseToken,
+    mintValue,
+    account,
+    token,
+    amount,
+    approveToken,
+    approveBaseToken,
+  )
+
+  if (!gas) {
+    const baseGasLimit = await estimateGas(client, {
+      account: account.address,
+      to: bridgehub,
+      value: tx.value,
+      data: tx.data,
+    } as EstimateGasParameters)
+    gas = scaleGasLimit(baseGasLimit)
+  }
+
+  return await sendTransaction(client, {
+    chain: chain_,
+    account,
+    gas,
+    ...tx,
+  } as SendTransactionParameters)
+}
+
+async function getL1DepositTx<
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  chainOverride extends Chain | undefined = Chain | undefined,
+  chainL2 extends ChainEIP712 | undefined = ChainEIP712 | undefined,
+  accountL2 extends Account | undefined = Account | undefined,
+  _derivedChain extends Chain | undefined = DeriveChain<chain, chainOverride>,
+>(
+  client: Client<Transport, chain, account>,
+  account: Account,
+  parameters: DepositParameters<
+    chain,
+    account,
+    chainOverride,
+    chainL2,
+    accountL2,
+    _derivedChain
+  >,
+  bridgeAddresses: BridgeContractAddresses,
+  bridgehub: Address,
+  baseToken: Address,
+) {
+  let {
+    account: _account,
+    chain: _chain,
+    client: l2Client,
+    token,
+    amount,
+    to,
+    operatorTip = 0n,
+    l2GasLimit,
+    gasPerPubdataByte = requiredL1ToL2GasPerPubdataLimit,
+    refundRecipient = ZeroAddress as Address,
+    bridgeAddress,
+    customBridgeData,
+    value,
+    gasPrice,
+    maxFeePerGas,
+    maxPriorityFeePerGas,
+    approveToken: _approveToken,
+    approveBaseToken: _approveBaseToken,
+    ...rest
+  } = parameters
+
+  if (!l2Client.chain) throw new ClientChainNotConfiguredError()
 
   to ??= account.address
   let gasPriceForEstimation = maxFeePerGas || gasPrice
@@ -273,76 +346,51 @@ export async function deposit<
     customBridgeData,
   )
   l2GasLimit = l2GasLimit_
+  let mintValue: bigint
+  let data: Hex
 
-  if (isETHBasedChain && isAddressEqual(token, ethAddressInContracts)) {
-    // Deposit ETH on ETH-based chain
-    const mintValue = baseCost + operatorTip + amount
-    if (!gas) {
-      const baseGasLimit = await estimateGas(client, {
-        account: account.address,
-        to: bridgehub,
-        value: mintValue,
-        data: encodeFunctionData({
-          abi: bridgehubAbi,
-          functionName: 'requestL2TransactionDirect',
-          args: [
-            {
-              chainId: BigInt(l2Client.chain.id),
-              mintValue,
-              l2Contract: to,
-              l2Value: amount,
-              l2Calldata: '0x',
-              l2GasLimit,
-              l2GasPerPubdataByteLimit: gasPerPubdataByte,
-              factoryDeps: [],
-              refundRecipient,
-            },
-          ],
-        }),
-      } as EstimateGasParameters)
-      gas = scaleGasLimit(baseGasLimit)
-    }
+  const isETHBasedChain = isAddressEqual(baseToken, ethAddressInContracts)
+  if (
+    (isETHBasedChain && isAddressEqual(token, ethAddressInContracts)) || // ETH on ETH-based chain
+    isAddressEqual(token, baseToken) // base token on custom chain
+  ) {
+    // Deposit base token
+    mintValue = baseCost + operatorTip + amount
+    let providedValue = isETHBasedChain ? value : mintValue
+    if (!providedValue || providedValue === 0n) providedValue = mintValue
+    if (baseCost > providedValue)
+      throw new BaseFeeHigherThanValueError(baseCost, providedValue)
 
-    return await requestExecute(client, {
-      chain: chain_,
-      account,
-      client: l2Client,
-      contractAddress: to,
-      calldata: '0x',
-      l2GasLimit,
-      mintValue,
-      l2Value: amount,
-      gasPerPubdataByte,
-      refundRecipient,
-      gas,
-      gasPrice,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-      ...rest,
+    value = isETHBasedChain ? providedValue : 0n
+    bridgeAddress = bridgeAddresses.sharedL1 // required for approval of base token on custom chain
+
+    data = encodeFunctionData({
+      abi: bridgehubAbi,
+      functionName: 'requestL2TransactionDirect',
+      args: [
+        {
+          chainId: BigInt(l2Client.chain.id),
+          mintValue: providedValue,
+          l2Contract: to,
+          l2Value: amount,
+          l2Calldata: '0x',
+          l2GasLimit,
+          l2GasPerPubdataByteLimit: gasPerPubdataByte,
+          factoryDeps: [],
+          refundRecipient,
+        },
+      ],
     })
-  }
-  if (isAddressEqual(baseToken, ethAddressInContracts)) {
+  } else if (isAddressEqual(baseToken, ethAddressInContracts)) {
     // Deposit token on ETH-based chain
-    const mintValue = baseCost + BigInt(operatorTip)
+    mintValue = baseCost + BigInt(operatorTip)
+    value = mintValue
     if (baseCost > mintValue)
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
     bridgeAddress ??= bridgeAddresses.sharedL1
 
-    await approveTokens(
-      client,
-      chain_,
-      bridgeAddress,
-      baseToken,
-      mintValue,
-      account,
-      token,
-      amount,
-      approveToken,
-      approveBaseToken,
-    )
-
-    const data = encodeFunctionData({
+    data = encodeFunctionData({
       abi: bridgehubAbi,
       functionName: 'requestL2TransactionTwoBridges',
       args: [
@@ -362,52 +410,16 @@ export async function deposit<
         },
       ],
     })
-
-    if (!gas) {
-      const baseGasLimit = await estimateGas(client, {
-        account: account.address,
-        to: bridgehub,
-        value: mintValue,
-        data,
-      } as EstimateGasParameters)
-      gas = scaleGasLimit(baseGasLimit)
-    }
-
-    return await sendTransaction(client, {
-      chain: chain_,
-      account,
-      to: bridgehub,
-      data,
-      value: mintValue,
-      gas,
-      gasPrice,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-      ...rest,
-    } as SendTransactionParameters)
-  }
-  if (isAddressEqual(token, ethAddressInContracts)) {
+  } else if (isAddressEqual(token, ethAddressInContracts)) {
     // Deposit ETH on custom chain
-    const mintValue = baseCost + operatorTip
+    mintValue = baseCost + operatorTip
+    value = amount
     if (baseCost > mintValue)
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
     bridgeAddress = bridgeAddresses.sharedL1
 
-    await approveTokens(
-      client,
-      chain_,
-      bridgeAddress,
-      baseToken,
-      mintValue,
-      account,
-      token,
-      amount,
-      approveToken,
-      approveBaseToken,
-    )
-
-    const data = encodeFunctionData({
+    data = encodeFunctionData({
       abi: bridgehubAbi,
       functionName: 'requestL2TransactionTwoBridges',
       args: [
@@ -427,160 +439,50 @@ export async function deposit<
         },
       ],
     })
-
-    if (!gas) {
-      const baseGasLimit = await estimateGas(client, {
-        account: account.address,
-        to: bridgehub,
-        value: amount,
-        data,
-      } as EstimateGasParameters)
-      gas = scaleGasLimit(baseGasLimit)
-    }
-
-    return await sendTransaction(client, {
-      chain: chain_,
-      account,
-      to: bridgehub,
-      data,
-      value: amount,
-      gas,
-      gasPrice,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
-      ...rest,
-    } as SendTransactionParameters)
-  }
-  if (isAddressEqual(token, baseToken)) {
-    // Deposit base token on custom chain
-    const mintValue = baseCost + operatorTip + amount
+  } else {
+    // Deposit token on custom chain
+    mintValue = baseCost + operatorTip
+    value ??= 0n
     if (baseCost > mintValue)
       throw new BaseFeeHigherThanValueError(baseCost, mintValue)
 
-    bridgeAddress = bridgeAddresses.sharedL1
+    bridgeAddress ??= bridgeAddresses.sharedL1
 
-    await approveTokens(
-      client,
-      chain_,
+    data = encodeFunctionData({
+      abi: bridgehubAbi,
+      functionName: 'requestL2TransactionTwoBridges',
+      args: [
+        {
+          chainId: BigInt(l2Client.chain.id),
+          mintValue,
+          l2Value: 0n,
+          l2GasLimit,
+          l2GasPerPubdataByteLimit: gasPerPubdataByte,
+          refundRecipient,
+          secondBridgeAddress: bridgeAddress,
+          secondBridgeValue: 0n,
+          secondBridgeCalldata: encodeAbiParameters(
+            parseAbiParameters('address x, uint256 y, address z'),
+            [token, amount, to],
+          ),
+        },
+      ],
+    })
+  }
+
+  return {
+    mintValue,
+    tx: {
       bridgeAddress,
-      baseToken,
-      mintValue,
-      account,
-      token,
-      amount,
-      approveToken,
-      approveBaseToken,
-    )
-
-    if (!gas) {
-      const baseGasLimit = await estimateGas(client, {
-        account: account.address,
-        to: bridgehub,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: bridgehubAbi,
-          functionName: 'requestL2TransactionDirect',
-          args: [
-            {
-              chainId: BigInt(l2Client.chain.id),
-              mintValue,
-              l2Contract: to,
-              l2Value: amount,
-              l2Calldata: '0x',
-              l2GasLimit,
-              l2GasPerPubdataByteLimit: gasPerPubdataByte,
-              factoryDeps: [],
-              refundRecipient,
-            },
-          ],
-        }),
-      } as EstimateGasParameters)
-      gas = scaleGasLimit(baseGasLimit)
-    }
-
-    return await requestExecute(client, {
-      chain: chain_,
-      account,
-      client: l2Client,
-      contractAddress: to,
-      calldata: '0x',
-      l2GasLimit,
-      mintValue,
-      l2Value: amount,
-      gasPerPubdataByte,
-      refundRecipient,
-      value: 0n,
-      gas,
+      to: bridgehub,
+      data,
+      value,
       gasPrice,
       maxFeePerGas,
       maxPriorityFeePerGas,
       ...rest,
-    })
+    },
   }
-  // Deposit token on custom chain
-  value ??= 0n
-  const mintValue = baseCost + operatorTip
-  if (baseCost > mintValue)
-    throw new BaseFeeHigherThanValueError(baseCost, mintValue)
-
-  bridgeAddress ??= bridgeAddresses.sharedL1
-
-  await approveTokens(
-    client,
-    chain_,
-    bridgeAddress,
-    baseToken,
-    mintValue,
-    account,
-    token,
-    amount,
-    approveToken,
-    approveBaseToken,
-  )
-
-  const data = encodeFunctionData({
-    abi: bridgehubAbi,
-    functionName: 'requestL2TransactionTwoBridges',
-    args: [
-      {
-        chainId: BigInt(l2Client.chain.id),
-        mintValue,
-        l2Value: 0n,
-        l2GasLimit,
-        l2GasPerPubdataByteLimit: gasPerPubdataByte,
-        refundRecipient,
-        secondBridgeAddress: bridgeAddress,
-        secondBridgeValue: 0n,
-        secondBridgeCalldata: encodeAbiParameters(
-          parseAbiParameters('address x, uint256 y, address z'),
-          [token, amount, to],
-        ),
-      },
-    ],
-  })
-
-  if (!gas) {
-    const baseGasLimit = await estimateGas(client, {
-      account: account.address,
-      to: bridgehub,
-      value,
-      data,
-    } as EstimateGasParameters)
-    gas = scaleGasLimit(baseGasLimit)
-  }
-
-  return await sendTransaction(client, {
-    chain: chain_,
-    account,
-    to: bridgehub,
-    data,
-    value,
-    gas,
-    gasPrice,
-    maxFeePerGas,
-    maxPriorityFeePerGas,
-    ...rest,
-  } as SendTransactionParameters)
 }
 
 async function approveTokens<
