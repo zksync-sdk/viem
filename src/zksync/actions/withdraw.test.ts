@@ -691,6 +691,31 @@ test('Custom: withdraw DAI token using paymaster', async () => {
   expect(balanceBeforeWithdrawal - balanceAfterWithdrawal >= amount).true
 })
 
+test('Custom: withdraw Crown token', async () => {
+  const amount = 5n
+
+  const balanceBeforeWithdrawal = await getTokenBalance(
+    customHyperchainClient,
+    approvalToken,
+    account.address,
+  )
+  const hash = await withdraw(customHyperchainClient, {
+    account,
+    amount,
+    token: approvalToken,
+  })
+  const receipt = await customHyperchainClient.waitForTransactionReceipt({
+    hash: hash,
+  })
+  const balanceAfterWithdrawal = await getTokenBalance(
+    customHyperchainClient,
+    approvalToken,
+    account.address,
+  )
+  expect(receipt.status).equals('success')
+  expect(balanceBeforeWithdrawal - balanceAfterWithdrawal).equal(amount)
+})
+
 test('Custom: withdraw base token with account hoisting', async () => {
   const amount = 7_000_000_000n
 
