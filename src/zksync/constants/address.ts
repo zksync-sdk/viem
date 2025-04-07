@@ -21,4 +21,10 @@ export const l1MessengerAddress =
 export const l1ToL2AliasOffset =
   '0x1111000000000000000000000000000000001111' as const
 
+export const l2AssetRouterAddress =
+  '0x0000000000000000000000000000000000010003' as const
+
+export const l2NativeTokenVaultAddress =
+  '0x0000000000000000000000000000000000010004' as const
+
 export const addressModulo = 2n ** 160n
