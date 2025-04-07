@@ -5,7 +5,7 @@ import { chainConfig } from '../../zksync/chainConfig.js'
 
 export const zksyncLocalHyperchain = /*#__PURE__*/ defineChain({
   ...chainConfig,
-  id: 270,
+  id: 271,
   name: 'ZKsync CLI Local Hyperchain',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: {
