@@ -112,8 +112,8 @@ test('ETH: not finalized withdrawal', async () => {
   const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
   expect(receipt.status).equals('success')
 
-  // wait for 5 seconds for tx to be in finalized state
-  await wait(5_000)
+  // wait for 15 seconds for tx to be in finalized state
+  await wait(15_000)
 
   expect(
     await isWithdrawalFinalized(hyperchainL1Client, {
@@ -174,8 +174,8 @@ test('ETH: not finalized withdrawal using account hoisting', async () => {
   const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
   expect(receipt.status).equals('success')
 
-  // wait for 5 seconds for tx to be in finalized state
-  await wait(5_000)
+  // wait for 15 seconds for tx to be in finalized state
+  await wait(15_000)
 
   expect(
     await isWithdrawalFinalized(hyperchainL1Client, {
@@ -198,8 +198,8 @@ test('ETH: not finalized DAI token withdrawal', async () => {
   const receipt = await hyperchainClient.waitForTransactionReceipt({ hash })
   expect(receipt.status).equals('success')
 
-  // wait for 5 seconds for tx to be in finalized state
-  await wait(5_000)
+  // wait for 15 seconds for tx to be in finalized state
+  await wait(15_000)
 
   expect(
     await isWithdrawalFinalized(hyperchainL1Client, {
@@ -288,8 +288,8 @@ test('Custom: not finalized withdrawal', async () => {
   })
   expect(receipt.status).equals('success')
 
-  // wait for 5 seconds for tx to be in finalized state
-  await wait(5_000)
+  // wait for 15 seconds for tx to be in finalized state
+  await wait(15_000)
 
   expect(
     await isWithdrawalFinalized(hyperchainL1Client, {
@@ -355,7 +355,7 @@ test('Custom: not finalized withdrawal using account hoisting', async () => {
   expect(receipt.status).equals('success')
 
   // wait for 5 seconds for tx to be in finalized state
-  await wait(5_000)
+  await wait(15_000)
 
   expect(
     await isWithdrawalFinalized(hyperchainL1Client, {

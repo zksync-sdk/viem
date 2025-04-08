@@ -2,10 +2,15 @@ import { expect, test } from 'vitest'
 import { anvilMainnet, anvilZksync } from '~test/src/anvil.js'
 import {
   accounts,
+  daiL1,
+  mockFailedDepositReceipt,
+  mockFailedDepositTransaction,
+  mockLogProof,
   mockRequestReturnData,
   zksyncAccounts,
 } from '~test/src/zksync.js'
 import { privateKeyToAccount } from '~viem/accounts/privateKeyToAccount.js'
+import { waitForTransactionReceipt } from '~viem/actions/public/waitForTransactionReceipt.js'
 import {
   http,
   type EIP1193RequestFn,
@@ -14,6 +19,8 @@ import {
 } from '~viem/index.js'
 import { wait } from '~viem/utils/wait.js'
 import {
+  type ZksyncBlockDetails,
+  getL2HashFromPriorityOp,
   legacyEthAddress,
   publicActionsL2,
   walletActionsL1,
@@ -43,6 +50,14 @@ const client = baseClient.extend(walletActionsL1())
 
 const baseZksyncClient = anvilZksync.getClient()
 baseZksyncClient.request = (async ({ method, params }) => {
+  if (
+    method === 'eth_getTransactionReceipt' &&
+    (<string[]>params)[0] ===
+      '0x5b08ec4c7ebb02c07a3f08bc5677aec87c47200f685f6389969a3c084bee13dc'
+  )
+    return mockFailedDepositReceipt
+  if (method === 'eth_getTransactionByHash') return mockFailedDepositTransaction
+  if (method === 'zks_getL2ToL1LogProof') return mockLogProof
   if (method === 'eth_call')
     return '0x00000000000000000000000070a0F165d6f8054d0d0CF8dFd4DD2005f0AF6B55'
   if (method === 'eth_estimateGas') return 158774n
@@ -85,6 +100,16 @@ test('deposit', async () => {
       to: account.address,
       refundRecipient: account.address,
       amount: 7_000_000_000n,
+    }),
+  ).toBeDefined()
+})
+
+test('claimFailedDeposit', async () => {
+  expect(
+    await client.claimFailedDeposit({
+      client: zksyncClient,
+      depositHash:
+        '0x5b08ec4c7ebb02c07a3f08bc5677aec87c47200f685f6389969a3c084bee13dc',
     }),
   ).toBeDefined()
 })
@@ -146,4 +171,47 @@ test('hyperchain: deposit', async () => {
       amount: 7_000_000_000n,
     }),
   ).toBeDefined()
+})
+
+test('hyperchain: claimFailedDeposit', async () => {
+  const account = privateKeyToAccount(zksyncAccounts[0].privateKey)
+  const hash = await hyperchainL1WalletClient.deposit({
+    client: hyperchainClient,
+    token: daiL1,
+    to: account.address,
+    amount: 7n,
+    approveToken: true,
+    refundRecipient: account.address,
+    l2GasLimit: 300_000n, // make it fail because of low gas
+  })
+
+  const receipt = await waitForTransactionReceipt(hyperchainL1WalletClient, {
+    hash,
+  })
+  const l2Hash = getL2HashFromPriorityOp(
+    receipt,
+    await hyperchainClient.getMainContractAddress(),
+  )
+  const l2Receipt = await hyperchainClient.waitForTransactionReceipt({
+    hash: l2Hash,
+  })
+  expect(l2Receipt.status).equals('reverted')
+  let blockDetails: ZksyncBlockDetails
+  do {
+    await wait(500)
+    blockDetails = await hyperchainClient.getBlockDetails({
+      number: Number(l2Receipt.blockNumber),
+    })
+  } while (!blockDetails || !blockDetails.executeTxHash)
+
+  const claimFailedDepositHash =
+    await hyperchainL1WalletClient.claimFailedDeposit({
+      client: hyperchainClient,
+      depositHash: l2Hash,
+    })
+  const claimFailedDepositReceipt = await waitForTransactionReceipt(
+    hyperchainL1WalletClient,
+    { hash: claimFailedDepositHash },
+  )
+  expect(claimFailedDepositReceipt.status).equals('success')
 })

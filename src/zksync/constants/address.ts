@@ -27,4 +27,7 @@ export const l2AssetRouterAddress =
 export const l2NativeTokenVaultAddress =
   '0x0000000000000000000000000000000000010004' as const
 
+export const bootloaderFormalAddress =
+  '0x0000000000000000000000000000000000008001' as const
+
 export const addressModulo = 2n ** 160n
